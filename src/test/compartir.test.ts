@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FORMATOS, nombreArchivo, redes, slug, textoCompartir } from "@/lib/compartir";
+import { FORMATOS, nombreArchivo, slug, textoCompartir } from "@/lib/compartir";
 import type { Escrito } from "@/lib/store";
 
 const doc: Escrito = {
@@ -36,20 +36,6 @@ describe("compartir", () => {
     expect(textoCompartir({ ...doc, autor: "" }, "https://x.test")).toBe(
       "“La calma después de nosotros”\nhttps://x.test",
     );
-  });
-
-  it("codifica el texto en los enlaces de cada red", () => {
-    const url = "https://ejemplo.com/obra/abc-123";
-    const texto = textoCompartir(doc, url);
-
-    expect(redes.whatsapp(texto)).toContain("https://wa.me/?text=");
-    expect(redes.whatsapp(texto)).toContain(encodeURIComponent(texto));
-    expect(redes.x(texto, url)).toContain("twitter.com/intent/tweet");
-    expect(redes.x(texto, url)).toContain(`url=${encodeURIComponent(url)}`);
-    expect(redes.facebook(url)).toBe(
-      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-    );
-    expect(redes.telegram(texto, url)).toContain("t.me/share/url");
   });
 
   it("ofrece formatos verticales y cuadrados de 1080 px", () => {

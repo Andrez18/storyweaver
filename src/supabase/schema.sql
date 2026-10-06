@@ -21,6 +21,30 @@ create table if not exists public.escritos (
 create index if not exists escritos_estado_idx on public.escritos (estado, actualizado desc);
 create index if not exists escritos_user_idx on public.escritos (user_id);
 
+-- =====================================================
+-- OPCIONAL — reglas de servidor
+-- La app ya envía estos campos, pero el trigger los garantiza aunque
+-- se escriba a mano desde el SQL Editor u otra sesión:
+--   · actualizado  = reloj de la base (no del navegador)
+--   · publicado_en = se rellena al publicar y se limpia al despublicar
+-- =====================================================
+create or replace function public.escritos_antes_de_cambiar()
+returns trigger language plpgsql as $$
+begin
+  new.actualizado := now();
+  if new.estado = 'publicado' then
+    new.publicado_en := coalesce(new.publicado_en, now());
+  else
+    new.publicado_en := null;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists escritos_antes_de_cambiar on public.escritos;
+create trigger escritos_antes_de_cambiar
+  before insert or update on public.escritos
+  for each row execute function public.escritos_antes_de_cambiar();
+
 -- Permisos de acceso a la API
 grant select on public.escritos to anon;
 grant select, insert, update, delete on public.escritos to authenticated;

@@ -1,10 +1,30 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import { toast } from "sonner";
-import { ChevronLeft, Share, Copy, Quote, PenLine, X } from "lucide-react";
+import {
+  ChevronLeft,
+  Share,
+  Copy,
+  Quote,
+  PenLine,
+  MoreHorizontal,
+  EyeOff,
+  Trash2,
+  X,
+} from "lucide-react";
 import { CompartirModal } from "@/components/compartir";
-import { FUENTES, esAutor, fuenteCss, obtener, palabras, minutos, type Escrito } from "@/lib/store";
+import {
+  FUENTES,
+  eliminar,
+  esAutor,
+  fuenteCss,
+  guardar,
+  obtener,
+  palabras,
+  minutos,
+  type Escrito,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/obra/$id")({
   head: () => ({
@@ -29,9 +49,12 @@ const DEF: Pref = { fuente: null, tam: 20, linea: 1.75, tema: "claro", capitular
 
 function Obra() {
   const { id } = Route.useParams();
+  const nav = useNavigate();
   const [doc, setDoc] = useState<Escrito | null | undefined>(undefined);
   const [p, setP] = useState<Pref>(DEF);
   const [ajustes, setAjustes] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [confirmar, setConfirmar] = useState(false);
   const [sel, setSel] = useState<{ texto: string; x: number; y: number } | null>(null);
   const [cita, setCita] = useState<string | null>(null);
   const [formato, setFormato] = useState<"ancho" | "cuadrado">("ancho");
@@ -67,6 +90,31 @@ function Obra() {
       localStorage.setItem("escritos.lectura", JSON.stringify(n));
       return n;
     });
+
+  async function despublicar() {
+    if (!doc) return;
+    try {
+      const n = { ...doc, estado: "borrador" as const, publicado_en: null };
+      await guardar(n);
+      setDoc(n);
+      setMenu(false);
+      toast.success("Obra despublicada", { description: "Ahora solo tú puedes verla." });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function eliminarObra() {
+    if (!doc) return;
+    try {
+      await eliminar(doc.id);
+      setMenu(false);
+      toast.success("Obra eliminada");
+      nav({ to: "/" });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
 
   useEffect(() => {
     const s = () =>
@@ -114,6 +162,19 @@ function Obra() {
         </Link>
         <div className="flex gap-2 text-foreground">
           {soyAutor && (
+            <button
+              onClick={() => {
+                setMenu(!menu);
+                setConfirmar(false);
+                setAjustes(false);
+              }}
+              className="glass grid h-10 w-10 place-items-center rounded-full"
+              aria-label="Opciones de la obra"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          )}
+          {soyAutor && (
             <Link
               to="/escribir/$id"
               params={{ id: doc.id }}
@@ -124,14 +185,20 @@ function Obra() {
             </Link>
           )}
           <button
-            onClick={() => setAjustes(!ajustes)}
+            onClick={() => {
+              setAjustes(!ajustes);
+              setMenu(false);
+            }}
             className="glass grid h-10 w-10 place-items-center rounded-full font-serif text-base"
             aria-label="Ajustes de lectura"
           >
             Aa
           </button>
           <button
-            onClick={() => setCompartir(true)}
+            onClick={() => {
+              setCompartir(true);
+              setMenu(false);
+            }}
             className="glass grid h-10 w-10 place-items-center rounded-full"
             aria-label="Compartir"
           >
@@ -139,6 +206,52 @@ function Obra() {
           </button>
         </div>
       </header>
+
+      {menu && soyAutor && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
+          <div className="glass fixed right-4 top-16 z-40 w-64 rounded-3xl p-2 text-sm text-foreground">
+            {!confirmar ? (
+              <div className="flex flex-col">
+                {doc.estado === "publicado" && (
+                  <button
+                    onClick={() => void despublicar()}
+                    className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-left transition hover:bg-secondary"
+                  >
+                    <EyeOff className="h-4 w-4" /> Despublicar
+                  </button>
+                )}
+                <button
+                  onClick={() => setConfirmar(true)}
+                  className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-destructive transition hover:bg-secondary"
+                >
+                  <Trash2 className="h-4 w-4" /> Eliminar
+                </button>
+              </div>
+            ) : (
+              <div className="p-2">
+                <p className="mb-3 leading-snug">
+                  ¿Eliminar «{doc.titulo.trim() || "Sin título"}»? No se puede deshacer.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmar(false)}
+                    className="flex-1 rounded-xl bg-secondary py-2 font-medium transition hover:bg-secondary/70"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => void eliminarObra()}
+                    className="flex-1 rounded-xl bg-destructive py-2 font-medium text-destructive-foreground transition hover:bg-destructive/90"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {ajustes && (
         <div className="glass fixed right-4 top-16 z-40 w-72 rounded-3xl p-5 text-sm text-foreground">

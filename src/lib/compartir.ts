@@ -407,16 +407,6 @@ export function textoCompartir(doc: Escrito, url: string): string {
   return `“${doc.titulo.trim() || "Sin título"}”${autor}\n${url}`;
 }
 
-export const redes = {
-  whatsapp: (texto: string) => `https://wa.me/?text=${encodeURIComponent(texto)}`,
-  x: (texto: string, url: string) =>
-    `https://twitter.com/intent/tweet?text=${encodeURIComponent(texto)}&url=${encodeURIComponent(url)}`,
-  facebook: (url: string) =>
-    `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-  telegram: (texto: string, url: string) =>
-    `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(texto)}`,
-};
-
 export type ResultadoCompartir = "compartido" | "cancelado" | "sin-soporte";
 
 /** Comparte la imagen con el menú nativo del sistema (Instagram, WhatsApp, Telegram…). */
