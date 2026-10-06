@@ -16,10 +16,9 @@ export type Escrito = {
   user_id?: string;
 };
 
-const URL = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
-const KEY = (import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] ?? import.meta.env['VITE_SUPABASE_ANON_KEY']) as
-  | string
-  | undefined;
+const URL = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
+const KEY = (import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
+  import.meta.env["VITE_SUPABASE_ANON_KEY"]) as string | undefined;
 
 let client: SupabaseClient | null = null;
 export function sb(): SupabaseClient | null {
@@ -83,6 +82,23 @@ export async function obtener(id: string): Promise<Escrito | null> {
   return leerLocal().find((e) => e.id === id) ?? null;
 }
 
+export async function uidActual(): Promise<string | null> {
+  const c = sb();
+  if (!c) return null;
+  const { data } = await c.auth.getUser();
+  return data.user?.id ?? null;
+}
+
+export function puedeEditar(doc: Escrito, uid: string | null): boolean {
+  if (!uid || !doc.user_id) return false;
+  return doc.user_id === uid;
+}
+
+export async function esAutor(doc: Escrito): Promise<boolean> {
+  if (!usaNube()) return true;
+  return puedeEditar(doc, await uidActual());
+}
+
 export async function guardar(e: Escrito): Promise<void> {
   e.actualizado = new Date().toISOString();
   localStorage.setItem("escritos.autor", e.autor);
@@ -90,6 +106,8 @@ export async function guardar(e: Escrito): Promise<void> {
   if (c) {
     const { data: u } = await c.auth.getUser();
     if (!u.user) throw new Error("Inicia sesión para guardar en la nube");
+    if (e.user_id && !puedeEditar(e, u.user.id))
+      throw new Error("Solo el autor de la obra puede editarla");
     if (!e.autor) e.autor = (await miPerfil())?.nombre ?? "";
     const { error } = await c.from("escritos").upsert({ ...e, user_id: u.user.id });
     if (error) throw error;
@@ -115,7 +133,10 @@ export function palabras(html: string) {
 }
 export const minutos = (n: number) => Math.max(1, Math.round(n / 220));
 export const extracto = (html: string, n = 180) => {
-  const t = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const t = html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return t.length > n ? t.slice(0, n) + "…" : t;
 };
 
