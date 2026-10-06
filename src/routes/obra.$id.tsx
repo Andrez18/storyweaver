@@ -18,6 +18,7 @@ import {
   FUENTES,
   eliminar,
   esAutor,
+  extracto,
   fuenteCss,
   guardar,
   obtener,
@@ -27,14 +28,36 @@ import {
 } from "@/lib/store";
 
 export const Route = createFileRoute("/obra/$id")({
-  head: () => ({
-    meta: [
-      { title: "Leer obra — Escritos" },
-      { name: "description", content: "Lee esta obra con tipografía y tema a tu gusto." },
-      { property: "og:title", content: "Leer obra — Escritos" },
-      { property: "og:description", content: "Lee esta obra con tipografía y tema a tu gusto." },
-    ],
-  }),
+  // SSR: trae la obra publicada para que las redes y los buscadores
+  // vean el título, el extracto y la imagen correctos.
+  loader: async ({ params }) => ({ doc: await obtener(params.id) }),
+  head: ({ loaderData, params }) => {
+    const doc = loaderData?.doc;
+    const base = doc?.titulo?.trim() || "Sin título";
+    const titulo = doc?.autor ? `${base} — ${doc.autor}` : base;
+    const descripcion = doc
+      ? extracto(doc.contenido, 160)
+      : "Lee esta obra con tipografía y tema a tu gusto.";
+    const sitio = (import.meta.env["VITE_SITE_URL"] as string | undefined)?.replace(/\/+$/, "");
+    const imagen = sitio ? `${sitio}/og.png` : "/og.png";
+    const enlace = sitio ? `${sitio}/obra/${params.id}` : `/obra/${params.id}`;
+    return {
+      meta: [
+        { title: `${titulo} — Escritos` },
+        { name: "description", content: descripcion },
+        { property: "og:type", content: "article" },
+        { property: "og:site_name", content: "Escritos" },
+        { property: "og:title", content: titulo },
+        { property: "og:description", content: descripcion },
+        { property: "og:image", content: imagen },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: titulo },
+        { name: "twitter:description", content: descripcion },
+        { name: "twitter:image", content: imagen },
+      ],
+      links: [{ rel: "canonical", href: enlace }],
+    };
+  },
   component: Obra,
 });
 
@@ -49,8 +72,9 @@ const DEF: Pref = { fuente: null, tam: 20, linea: 1.75, tema: "claro", capitular
 
 function Obra() {
   const { id } = Route.useParams();
+  const inicial = Route.useLoaderData();
   const nav = useNavigate();
-  const [doc, setDoc] = useState<Escrito | null | undefined>(undefined);
+  const [docCli, setDocCli] = useState<Escrito | null | undefined>(undefined);
   const [p, setP] = useState<Pref>(DEF);
   const [ajustes, setAjustes] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -61,6 +85,11 @@ function Obra() {
   const [prog, setProg] = useState(0);
   const [compartir, setCompartir] = useState(false);
   const [soyAutor, setSoyAutor] = useState(false);
+
+  // El SSR trae la obra publicada; si no la trae (borrador propio o borrada),
+  // se vuelve a pedir desde el navegador con la sesión del usuario.
+  const cargando = !inicial.doc && docCli === undefined;
+  const doc: Escrito | null = docCli && docCli.id === id ? docCli : inicial.doc;
 
   useEffect(() => {
     if (!doc) {
@@ -77,13 +106,14 @@ function Obra() {
   }, [doc]);
 
   useEffect(() => {
-    obtener(id).then(setDoc);
+    setDocCli(undefined);
+    if (!inicial.doc) obtener(id).then(setDocCli);
     try {
       setP({ ...DEF, ...JSON.parse(localStorage.getItem("escritos.lectura") || "{}") });
     } catch {
       /* */
     }
-  }, [id]);
+  }, [id, inicial.doc]);
   const upd = (x: Partial<Pref>) =>
     setP((o) => {
       const n = { ...o, ...x };
@@ -96,7 +126,7 @@ function Obra() {
     try {
       const n = { ...doc, estado: "borrador" as const, publicado_en: null };
       await guardar(n);
-      setDoc(n);
+      setDocCli(n);
       setMenu(false);
       toast.success("Obra despublicada", { description: "Ahora solo tú puedes verla." });
     } catch (e) {
@@ -134,7 +164,7 @@ function Obra() {
     };
   }, []);
 
-  if (doc === undefined) return <p className="p-10 text-center text-muted-foreground">Cargando…</p>;
+  if (cargando) return <p className="p-10 text-center text-muted-foreground">Cargando…</p>;
   if (!doc)
     return (
       <div className="p-10 text-center">
@@ -316,7 +346,19 @@ function Obra() {
           <p className="mt-3 text-xl italic text-muted-foreground">{doc.subtitulo}</p>
         )}
         <p className="mt-6 font-sans text-sm text-muted-foreground">
-          {doc.autor && <span className="font-medium text-ink">{doc.autor} · </span>}
+          {doc.autor &&
+            (doc.user_id ? (
+              <Link
+                to="/autor/$id"
+                params={{ id: doc.user_id }}
+                className="font-medium text-ink underline-offset-4 hover:underline"
+              >
+                {doc.autor}
+              </Link>
+            ) : (
+              <span className="font-medium text-ink">{doc.autor}</span>
+            ))}
+          {doc.autor && " · "}
           {minutos(n)} min de lectura
           {doc.publicado_en &&
             ` · ${new Date(doc.publicado_en).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}`}
@@ -324,9 +366,14 @@ function Obra() {
         {doc.etiquetas.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2 font-sans text-xs">
             {doc.etiquetas.map((t) => (
-              <span key={t} className="rounded-full border px-2.5 py-0.5 text-muted-foreground">
+              <Link
+                key={t}
+                to="/"
+                search={{ tag: t }}
+                className="rounded-full border px-2.5 py-0.5 text-muted-foreground transition hover:border-ink/30 hover:text-ink"
+              >
                 {t}
-              </span>
+              </Link>
             ))}
           </div>
         )}

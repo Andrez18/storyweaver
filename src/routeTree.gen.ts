@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EntrarRouteImport } from './routes/entrar'
+import { Route as PerfilRouteImport } from './routes/perfil'
+import { Route as AutorIdRouteImport } from './routes/autor.$id'
 import { Route as EscribirIdRouteImport } from './routes/escribir.$id'
 import { Route as ObraIdRouteImport } from './routes/obra.$id'
 
@@ -22,6 +24,16 @@ const IndexRoute = IndexRouteImport.update({
 const EntrarRoute = EntrarRouteImport.update({
   id: '/entrar',
   path: '/entrar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilRoute = PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AutorIdRoute = AutorIdRouteImport.update({
+  id: '/autor/$id',
+  path: '/autor/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EscribirIdRoute = EscribirIdRouteImport.update({
@@ -38,12 +50,16 @@ const ObraIdRoute = ObraIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/entrar': typeof EntrarRoute
+  '/perfil': typeof PerfilRoute
+  '/autor/$id': typeof AutorIdRoute
   '/escribir/$id': typeof EscribirIdRoute
   '/obra/$id': typeof ObraIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/entrar': typeof EntrarRoute
+  '/perfil': typeof PerfilRoute
+  '/autor/$id': typeof AutorIdRoute
   '/escribir/$id': typeof EscribirIdRoute
   '/obra/$id': typeof ObraIdRoute
 }
@@ -51,20 +67,32 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/entrar': typeof EntrarRoute
+  '/perfil': typeof PerfilRoute
+  '/autor/$id': typeof AutorIdRoute
   '/escribir/$id': typeof EscribirIdRoute
   '/obra/$id': typeof ObraIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/entrar' | '/escribir/$id' | '/obra/$id'
+  fullPaths:
+    '/' | '/entrar' | '/perfil' | '/autor/$id' | '/escribir/$id' | '/obra/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/entrar' | '/escribir/$id' | '/obra/$id'
-  id: '__root__' | '/' | '/entrar' | '/escribir/$id' | '/obra/$id'
+  to: '/' | '/entrar' | '/perfil' | '/autor/$id' | '/escribir/$id' | '/obra/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/entrar'
+    | '/perfil'
+    | '/autor/$id'
+    | '/escribir/$id'
+    | '/obra/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EntrarRoute: typeof EntrarRoute
+  PerfilRoute: typeof PerfilRoute
+  AutorIdRoute: typeof AutorIdRoute
   EscribirIdRoute: typeof EscribirIdRoute
   ObraIdRoute: typeof ObraIdRoute
 }
@@ -83,6 +111,20 @@ declare module '@tanstack/react-router' {
       path: '/entrar'
       fullPath: '/entrar'
       preLoaderRoute: typeof EntrarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil': {
+      id: '/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof PerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/autor/$id': {
+      id: '/autor/$id'
+      path: '/autor/$id'
+      fullPath: '/autor/$id'
+      preLoaderRoute: typeof AutorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/escribir/$id': {
@@ -105,6 +147,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EntrarRoute: EntrarRoute,
+  PerfilRoute: PerfilRoute,
+  AutorIdRoute: AutorIdRoute,
   EscribirIdRoute: EscribirIdRoute,
   ObraIdRoute: ObraIdRoute,
 }

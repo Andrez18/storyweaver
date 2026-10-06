@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -38,6 +38,8 @@ import {
   nuevoEscrito,
   palabras,
   minutos,
+  uidActual,
+  usaNube,
   type Escrito,
 } from "@/lib/store";
 
@@ -67,6 +69,26 @@ function Escribir() {
   const [estado, setEstado] = useState("Guardado");
   const [panel, setPanel] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendiente = useRef<Escrito | null>(null);
+
+  // En la nube, solo quien tiene sesión puede abrir el editor.
+  useEffect(() => {
+    if (!usaNube()) return;
+    let vivo = true;
+    uidActual().then((u) => {
+      if (vivo && !u) nav({ to: "/entrar" });
+    });
+    return () => {
+      vivo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+  }, []);
+
+  // Aviso del navegador si quedan cambios sin guardar al cerrar la pestaña.
+  useBlocker({
+    shouldBlockFn: () => false,
+    enableBeforeUnload: () => pendiente.current !== null,
+  });
 
   useEffect(() => {
     setMeta(Number(localStorage.getItem("escritos.meta") || 1000));
@@ -113,17 +135,38 @@ function Escribir() {
     [doc?.id],
   );
 
+  function guardarAhora() {
+    const n = pendiente.current;
+    if (!n) return;
+    clearTimeout(timer.current);
+    pendiente.current = null;
+    setEstado("Guardando…");
+    guardar(n)
+      .then(() => setEstado("Guardado"))
+      .catch((e) => setEstado(e.message));
+  }
+
+  // Si la pestaña se oculta o se cierra, guarda lo último sin esperar al temporizador.
+  useEffect(() => {
+    const ocultar = () => {
+      if (document.visibilityState === "hidden") guardarAhora();
+    };
+    document.addEventListener("visibilitychange", ocultar);
+    window.addEventListener("pagehide", guardarAhora);
+    return () => {
+      document.removeEventListener("visibilitychange", ocultar);
+      window.removeEventListener("pagehide", guardarAhora);
+    };
+  }, []);
+
   function cambiar(p: Partial<Escrito>) {
     setDoc((d) => {
       if (!d) return d;
       const n = { ...d, ...p };
-      setEstado("Guardando…");
+      pendiente.current = n;
+      setEstado("Sin guardar…");
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
-        guardar(n)
-          .then(() => setEstado("Guardado"))
-          .catch((e) => setEstado(e.message));
-      }, 1200);
+      timer.current = setTimeout(guardarAhora, 1200);
       return n;
     });
   }
@@ -132,6 +175,11 @@ function Escribir() {
     if (!doc) return;
     if (!doc.titulo.trim()) {
       toast.error("Dale un título a tu obra");
+      return;
+    }
+    if (usaNube() && !(await uidActual())) {
+      toast.error("Inicia sesión para publicar");
+      nav({ to: "/entrar" });
       return;
     }
     const n: Escrito = {

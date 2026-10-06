@@ -20,16 +20,30 @@ const URL = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
 const KEY = (import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
   import.meta.env["VITE_SUPABASE_ANON_KEY"]) as string | undefined;
 
-let client: SupabaseClient | null = null;
+let clienteWeb: SupabaseClient | null = null;
+let clienteServidor: SupabaseClient | null = null;
+
+/**
+ * Cliente de Supabase. En el navegador mantiene la sesión del usuario; en el
+ * servidor solo lee (sin sesión), para poder SSR las obras publicadas.
+ */
 export function sb(): SupabaseClient | null {
-  if (!URL || !KEY || typeof window === "undefined") return null;
-  if (!client) client = createClient(URL, KEY);
-  return client;
+  if (!URL || !KEY) return null;
+  if (typeof window === "undefined") {
+    if (!clienteServidor)
+      clienteServidor = createClient(URL, KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+    return clienteServidor;
+  }
+  if (!clienteWeb) clienteWeb = createClient(URL, KEY);
+  return clienteWeb;
 }
 export const usaNube = () => Boolean(URL && KEY);
 
 const LS = "escritos.v1";
 const leerLocal = (): Escrito[] => {
+  if (typeof localStorage === "undefined") return [];
   try {
     return JSON.parse(localStorage.getItem(LS) || "[]");
   } catch {
@@ -80,6 +94,137 @@ export async function obtener(id: string): Promise<Escrito | null> {
     return (data as Escrito) ?? null;
   }
   return leerLocal().find((e) => e.id === id) ?? null;
+}
+
+export const TAMANO_PAGINA = 50;
+
+export type Filtro = { q?: string; tag?: string; desde?: number; limite?: number };
+
+/** Limpia el texto de búsqueda para que no rompa el filtro `.or()` de PostgREST. */
+export function normalizarBusqueda(consulta: string): string {
+  return consulta
+    .replace(/[,%()*\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
+/** Filtra en memoria (modo local): obras por texto y por etiqueta. */
+export function filtrarLocal(docs: Escrito[], f: Filtro, soloPublicados = true): Escrito[] {
+  const q = normalizarBusqueda(f.q ?? "").toLowerCase();
+  const tag = (f.tag ?? "").trim().toLowerCase();
+  let l = soloPublicados ? docs.filter((e) => e.estado === "publicado") : [...docs];
+  if (q) l = l.filter((e) => `${e.titulo} ${e.subtitulo} ${e.contenido}`.toLowerCase().includes(q));
+  if (tag) l = l.filter((e) => e.etiquetas.some((t) => t.toLowerCase() === tag));
+  l = l.sort((a, b) => b.actualizado.localeCompare(a.actualizado));
+  const desde = f.desde ?? 0;
+  const limite = f.limite ?? TAMANO_PAGINA;
+  return l.slice(desde, desde + limite);
+}
+
+/** Obras publicadas con búsqueda, etiqueta y paginación. */
+export async function buscarPublicados(f: Filtro): Promise<Escrito[]> {
+  const c = sb();
+  const desde = f.desde ?? 0;
+  const limite = f.limite ?? TAMANO_PAGINA;
+  if (c) {
+    let q = c.from("escritos").select("*").eq("estado", "publicado");
+    const texto = normalizarBusqueda(f.q ?? "");
+    if (texto) q = q.or(`titulo.ilike.*${texto}*,subtitulo.ilike.*${texto}*`);
+    const tag = (f.tag ?? "").trim();
+    if (tag) q = q.contains("etiquetas", [tag]);
+    const { data, error } = await q
+      .order("actualizado", { ascending: false })
+      .range(desde, desde + limite - 1);
+    if (error) throw error;
+    return (data ?? []) as Escrito[];
+  }
+  return filtrarLocal(leerLocal(), { ...f, desde, limite });
+}
+
+/** Obras publicadas de un autor (solo existe con sesión y nube). */
+export async function publicadosDe(userId: string): Promise<Escrito[]> {
+  const c = sb();
+  if (!c) return [];
+  const { data, error } = await c
+    .from("escritos")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("estado", "publicado")
+    .order("actualizado", { ascending: false });
+  if (error) throw error;
+  return data as Escrito[];
+}
+
+/** Perfil público: lo que se muestra en /autor y nada más. El correo nunca
+ *  se guarda aquí ni se consulta para el público. */
+export type Perfil = {
+  id: string;
+  nombre: string;
+  biografia: string;
+  ubicacion: string;
+  enlace: string;
+  avatar_url: string;
+  actualizado?: string;
+};
+
+export const PERFIL_VACIO: Omit<Perfil, "id"> = {
+  nombre: "",
+  biografia: "",
+  ubicacion: "",
+  enlace: "",
+  avatar_url: "",
+};
+
+const PERFIL_LOCAL = "escritos.perfil";
+
+function leerPerfilLocal(): Perfil {
+  const base: Perfil = { id: "local", ...PERFIL_VACIO };
+  if (typeof localStorage === "undefined") return base;
+  let p: Partial<Perfil> = {};
+  try {
+    p = JSON.parse(localStorage.getItem(PERFIL_LOCAL) || "{}");
+  } catch {
+    p = {};
+  }
+  return {
+    ...base,
+    ...p,
+    id: "local",
+    nombre: p.nombre || localStorage.getItem("escritos.autor") || "",
+  };
+}
+
+/** Perfil público de un autor. */
+export async function perfil(id: string): Promise<Perfil | null> {
+  const c = sb();
+  if (!c) return leerPerfilLocal();
+  const { data } = await c
+    .from("perfiles")
+    .select("id, nombre, biografia, ubicacion, enlace, avatar_url, actualizado")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as Perfil) ?? null;
+}
+
+export async function guardarPerfil(p: Omit<Perfil, "id">): Promise<void> {
+  const limpio = {
+    nombre: p.nombre.trim().slice(0, 80),
+    biografia: p.biografia.trim().slice(0, 400),
+    ubicacion: p.ubicacion.trim().slice(0, 80),
+    enlace: p.enlace.trim().slice(0, 200),
+    avatar_url: p.avatar_url.trim().slice(0, 400),
+    actualizado: new Date().toISOString(),
+  };
+  const c = sb();
+  if (!c) {
+    localStorage.setItem(PERFIL_LOCAL, JSON.stringify(limpio));
+    return;
+  }
+  const uid = await uidActual();
+  if (!uid) throw new Error("Inicia sesión para editar tu perfil");
+  const { error } = await c.from("perfiles").upsert({ id: uid, ...limpio });
+  if (error) throw error;
 }
 
 export async function uidActual(): Promise<string | null> {
@@ -151,11 +296,10 @@ export const FUENTES = [
 ];
 export const fuenteCss = (id: string) => (FUENTES.find((f) => f.id === id) ?? FUENTES[0]!).css;
 
-export async function miPerfil(): Promise<{ id: string; nombre: string } | null> {
+export async function miPerfil(): Promise<Perfil | null> {
   const c = sb();
-  if (!c) return null;
+  if (!c) return leerPerfilLocal();
   const { data: u } = await c.auth.getUser();
   if (!u.user) return null;
-  const { data } = await c.from("perfiles").select("id, nombre").eq("id", u.user.id).maybeSingle();
-  return data ?? { id: u.user.id, nombre: u.user.email?.split("@")[0] ?? "" };
+  return (await perfil(u.user.id)) ?? { id: u.user.id, ...PERFIL_VACIO };
 }

@@ -85,16 +85,22 @@ create policy "El autor borra"
   using (auth.uid() = user_id);
 
 -- =====================================================
--- Perfiles de escritores (nombre de autor público)
+-- Perfiles de escritores: lo público del autor.
+-- OJO: el correo vive solo en auth.users y NUNCA se guarda aquí.
 -- =====================================================
 create table if not exists public.perfiles (
   id          uuid primary key references auth.users(id) on delete cascade,
-  nombre      text not null default '',
-  creado      timestamptz not null default now()
+  nombre      text not null default '',          -- nombre público elegido por la persona
+  biografia   text not null default '',
+  ubicacion   text not null default '',
+  enlace      text not null default '',          -- web / red social
+  avatar_url  text not null default '',          -- URL de la foto
+  creado      timestamptz not null default now(),
+  actualizado timestamptz not null default now()
 );
 
 grant select on public.perfiles to anon, authenticated;
-grant update on public.perfiles to authenticated;
+grant insert, update on public.perfiles to authenticated;
 grant all on public.perfiles to service_role;
 
 alter table public.perfiles enable row level security;
@@ -103,17 +109,23 @@ drop policy if exists "Perfiles visibles para todos" on public.perfiles;
 create policy "Perfiles visibles para todos"
   on public.perfiles for select to anon, authenticated using (true);
 
+drop policy if exists "Cada uno crea su perfil" on public.perfiles;
+create policy "Cada uno crea su perfil"
+  on public.perfiles for insert to authenticated
+  with check (auth.uid() = id);
+
 drop policy if exists "Cada uno edita su perfil" on public.perfiles;
 create policy "Cada uno edita su perfil"
   on public.perfiles for update to authenticated
   using (auth.uid() = id) with check (auth.uid() = id);
 
--- Crea el perfil automáticamente al registrarse
+-- Crea el perfil automáticamente al registrarse (nombre = nombre público
+-- elegido en el formulario; si no, queda vacío: nunca el correo).
 create or replace function public.crear_perfil()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   insert into public.perfiles (id, nombre)
-  values (new.id, coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email, '@', 1)));
+  values (new.id, coalesce(new.raw_user_meta_data->>'nombre', ''));
   return new;
 end $$;
 
