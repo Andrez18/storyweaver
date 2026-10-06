@@ -1,0 +1,122 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Figtree", system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-highlight: var(--highlight);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+}
+
+:root {
+  --radius: 1rem;
+  --background: oklch(0.975 0.003 90);
+  --foreground: oklch(0.2 0.005 90);
+  --paper: oklch(1 0 0);
+  --ink: oklch(0.22 0.006 90);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.005 90);
+  --popover: oklch(1 0 0 / 0.92);
+  --popover-foreground: oklch(0.2 0.005 90);
+  --primary: oklch(0.18 0.004 90);
+  --primary-foreground: oklch(0.98 0.003 90);
+  --secondary: oklch(0.94 0.004 90);
+  --secondary-foreground: oklch(0.2 0.005 90);
+  --muted: oklch(0.95 0.004 90);
+  --muted-foreground: oklch(0.52 0.008 90);
+  --accent: oklch(0.94 0.08 98);
+  --accent-foreground: oklch(0.25 0.03 90);
+  --highlight: oklch(0.93 0.12 98);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.91 0.004 90);
+  --input: oklch(0.91 0.004 90);
+  --ring: oklch(0.7 0.01 90);
+  --shadow-float: 0 18px 50px -18px oklch(0.2 0.01 90 / 0.28), 0 2px 6px oklch(0.2 0.01 90 / 0.06);
+}
+
+/* Temas de lectura */
+.tema-sepia {
+  --paper: oklch(0.96 0.025 85);
+  --ink: oklch(0.3 0.03 60);
+  --muted-foreground: oklch(0.5 0.03 60);
+  --border: oklch(0.88 0.03 80);
+}
+.tema-noche {
+  --paper: oklch(0.2 0.004 90);
+  --ink: oklch(0.88 0.005 90);
+  --muted-foreground: oklch(0.62 0.008 90);
+  --border: oklch(0.32 0.005 90);
+  --highlight: oklch(0.55 0.1 95);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@utility glass {
+  background: var(--popover);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: var(--shadow-float);
+}
+@utility shadow-float {
+  box-shadow: var(--shadow-float);
+}
+
+/* Contenido con formato (editor y lectura) */
+.prosa { color: var(--ink); line-height: 1.7; }
+.prosa > * + * { margin-top: 0.9em; }
+.prosa h1 { font-size: 1.9em; line-height: 1.2; font-weight: 600; margin-top: 1.4em; }
+.prosa h2 { font-size: 1.45em; line-height: 1.25; font-weight: 600; margin-top: 1.3em; }
+.prosa h3 { font-size: 1.15em; font-weight: 600; margin-top: 1.2em; }
+.prosa blockquote { border-left: 3px solid var(--ink); padding-left: 1em; font-style: italic; }
+.prosa ul { list-style: disc; padding-left: 1.4em; }
+.prosa ol { list-style: decimal; padding-left: 1.4em; }
+.prosa hr { border: 0; text-align: center; margin: 2em 0; }
+.prosa hr::after { content: "⁂"; color: var(--muted-foreground); letter-spacing: 0.5em; }
+.prosa mark { background: var(--highlight); color: inherit; border-radius: 3px; padding: 0.05em 0.15em; }
+.prosa a { text-decoration: underline; text-underline-offset: 3px; }
+.prosa p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); color: var(--muted-foreground); float: left; height: 0; pointer-events: none;
+}
+.prosa.capitular > p:first-of-type::first-letter {
+  float: left; font-size: 3.4em; line-height: 0.9; padding: 0.06em 0.1em 0 0; font-weight: 600;
+}
+.ProseMirror:focus { outline: none; }
+.enfoque .ProseMirror > *:not(.has-focus) { opacity: 0.28; transition: opacity 0.3s; }
+::selection { background: var(--highlight); }
